@@ -9,6 +9,8 @@
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "radar_msgs/msg/multi_array_dimmension.hpp"
+#include "radar_msgs/msg/adc_data_cube.hpp"
 
 // #include "Runner.hpp"
 #include "Runner.hpp"
@@ -34,6 +36,16 @@ private:
         std::vector<std::vector<float>> &detected_points,
         const std::string &frame_id,
         rclcpp::Time timestamp);
+    
+    radar_msgs::msg::ADCDataCube get_AdcDataCube_msg(
+        std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
+        const std::string &frame_id,
+        rclcpp::Time timestamp
+    );
+    void save_adc_cube_to_msg(
+        std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
+        radar_msgs::msg::ADCDataCube & msg
+    );
 //variables
 public:
 
@@ -47,6 +59,7 @@ private:
     //publishers
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr radar_config_path_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr detected_points_pub_;
+    rclcpp::Publisher<radar_msgs::msg::ADCDataCube>::SharedPtr adc_data_cube_pub_;
 };
 
 #endif

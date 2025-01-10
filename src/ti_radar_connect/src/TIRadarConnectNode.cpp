@@ -30,8 +30,17 @@ TIRadarConnectNode::TIRadarConnectNode():
 
     radar_config_path_pub_ = 
         this->create_publisher<std_msgs::msg::String>("radar_config_path",qos_profile);
-    detected_points_pub_ = 
-        this->create_publisher<sensor_msgs::msg::PointCloud2>("detected_points",qos_profile);
+    
+    if(runner.get_serial_streaming_enabled()){
+        detected_points_pub_ = 
+            this->create_publisher<sensor_msgs::msg::PointCloud2>("detected_points",qos_profile);
+    }
+
+    if(runner.get_dca1000_streaming_enabled()){
+        adc_data_cube_pub_ = 
+            this->create_publisher<radar_msgs::msg::ADCDataCube>("adc_data_cube",qos_profile);
+    }
+    
 
     //publish the radar_config_path
     radar_config_path = runner.get_radar_config_path();
@@ -74,7 +83,15 @@ void TIRadarConnectNode::run_ti_radar(void){
             if(runner.get_dca1000_streaming_enabled()){
                 std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> adc_cube =
                     runner.get_next_adc_cube(timeout_ms);
-                //TODO: add code to get the next adc cube
+                
+                //get the adc_data_cube message
+                radar_msgs::msg::ADCDataCube adc_cube_msg = get_AdcDataCube_msg(
+                    adc_cube,
+                    this -> get_namespace(),
+                    this -> now()
+                );
+
+                adc_data_cube_pub_ -> publish(adc_cube_msg);
             }
         }
 
@@ -149,4 +166,69 @@ sensor_msgs::msg::PointCloud2 TIRadarConnectNode::get_pointcloud2_msg(
     }
 
     return point_cloud_msg;
+}
+
+radar_msgs::msg::ADCDataCube TIRadarConnectNode::get_AdcDataCube_msg(
+        std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
+        const std::string &frame_id,
+        rclcpp::Time timestamp
+    )
+{
+    radar_msgs::msg::ADCDataCube msg = radar_msgs::msg::ADCDataCube();
+  if(adc_cube.size() > 0){
+    //stamp the header
+    msg.header.stamp = timestamp;
+    msg.header.frame_id = frame_id;
+
+    //save the real and imaginary data
+    save_adc_cube_to_msg(adc_cube,msg);
+
+    //define the layout
+    msg.layout.dim.push_back(radar_msgs::msg::MultiArrayDimension());
+    msg.layout.dim[0].label = "rx_channel";
+    msg.layout.dim[0].size = adc_cube.size();
+    msg.layout.dim[0].stride = adc_cube[0].size() * adc_cube[0][0].size();
+    msg.layout.dim.push_back(radar_msgs::msg::MultiArrayDimension());
+    msg.layout.dim[1].label = "sample";
+    msg.layout.dim[1].size = adc_cube[0].size();
+    msg.layout.dim[1].stride = adc_cube[0][0].size();
+    msg.layout.dim.push_back(radar_msgs::msg::MultiArrayDimension());
+    msg.layout.dim[2].label = "chirp";
+    msg.layout.dim[2].size = adc_cube[0][0].size();
+    msg.layout.dim[2].stride = 1;
+  }
+
+  return msg;
+}
+
+void TIRadarConnectNode::save_adc_cube_to_msg(
+    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
+    radar_msgs::msg::ADCDataCube & msg
+){
+
+  size_t samples_per_frame = adc_cube.size() * adc_cube[0].size() * adc_cube[0][0].size();
+  size_t chirps_per_frame = adc_cube[0][0].size();
+  size_t samples_per_chirp = adc_cube[0].size();
+  size_t num_rxs = adc_cube.size();
+
+  //pre-allocate the buffer data
+  msg.imag_data = std::vector<std::int16_t>(samples_per_frame,0);
+  msg.real_data = std::vector<std::int16_t>(samples_per_frame,0);
+
+  size_t out_idx = 0;
+
+  for (size_t rx_idx = 0; rx_idx < num_rxs; rx_idx++)
+  {
+    for (size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx ++)
+    {
+      for (size_t chirp_idx = 0; chirps_per_frame; chirp_idx ++){
+
+        msg.real_data[out_idx] = adc_cube[rx_idx][sample_idx][chirp_idx].real();
+        msg.imag_data[out_idx] = adc_cube[rx_idx][sample_idx][chirp_idx].imag();
+
+        //increment the out index
+        out_idx += 1;
+      }
+    }
+  }
 }
