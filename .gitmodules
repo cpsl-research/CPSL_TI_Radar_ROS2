@@ -1,3 +1,0 @@
-[submodule "src/radar_connect/include/CPSL_TI_Radar"]
-	path = src/radar_connect/include/CPSL_TI_Radar
-	url = https://github.com/davidmhunt/CPSL_TI_Radar
