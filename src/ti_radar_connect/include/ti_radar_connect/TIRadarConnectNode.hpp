@@ -9,7 +9,7 @@
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 #include "std_msgs/msg/string.hpp"
-#include "radar_msgs/msg/multi_array_dimmension.hpp"
+#include "radar_msgs/msg/multi_array_dimension.hpp"
 #include "radar_msgs/msg/adc_data_cube.hpp"
 
 // #include "Runner.hpp"
