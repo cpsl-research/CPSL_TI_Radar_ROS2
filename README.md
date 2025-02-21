@@ -48,21 +48,29 @@ source install/setup.bash
 
 Below are several tutorials for utilizing the CPSL_TI_Radar ROS2 nodes and integrating them with other sensor measurements. For these tutorials, its often helpful to use a terminal with multiple windows. Here, we recommend using a terminal viewer like [tmux](https://tmuxcheatsheet.com/#:~:text=Tmux%20Cheat%20Sheet%20%26%20Quick%20Reference%201%20Sessions,6%20Help%20%24%20tmux%20list-keys%20%3A%20list-keys%20) which allows you to create/view multiple panes and windows in a single terminal window. 
 
-## 1. Launching the ROS2 Node to stream data
+## 1. Streaming point cloud data from IWR1843/IWR6843 Radar boards
 
-If you want to collect a dataset which includes raw Radar data from a DCA1000 board, follow these instructions. **NOTE: ONLY THE IWR1443 + DCA1000 is supported. Future updates will support the IWR1843 and IWR6843**.
+Follow these instructions to stream raw radar point clouds from an IWR1843 or IWR6843 radar board in ROS2
 
-### Configuration files
+1. **Radar Hardware Setup**. Before continuing, follow the steps in the [CPSL_TI_Radar_cpp Readme](./src/ti_radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/Readme.md). The current code is built for mmWave SDK3.6, but it should also work on other datasets as well.
 
-There are three configuration files that must be loaded inorder for data capture with the DCA1000 to work correctly. Please review the following instructions carefully to ensure that everything is setup correctly. 
+2. **IWR .cfg file**: Next, setup a .cfg file for the TI IWR that you are using. This file includes all of the essential radar parameters which affect the radar's sensing specifications. Many samples are available in the [CPSL_TI_Radar/configurations](./src/ti_radar_connect/include/CPSL_TI_Radar/configurations/). Additional configurations can also be generated using the Ti mmWave Demo if desired as well.
 
-1. **IWR .cfg file**: First, you must generate a .cfg file for the TI IWR that you are using. This file includes all of the essential radar parameters which affect the radar's sensing specifications. Several examples are available in the [configurations/DCA1000/custom_configs](./radar_connect/include/CPSL_TI_Radar/configurations/DCA1000/custom_configs/) folder in the CPSL_TI_Radar module. More information on how to setup and analyze these configurations can be found on the [CPSL_TI_Radar c++ module documentation](https://github.com/davidmhunt/CPSL_TI_Radar/tree/main/CPSL_TI_Radar_cpp) under "Radar .cfg file".
+3. **.json configuration file**: Next, setup a .json configuration file that is used to actually run the CPSL_TI_Radar_cpp code used by the ROS2 nodes. Example json configs can be found in the [CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs](./src/ti_radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs). If just streaming the raw data (i.e.; not ADC samples using the DCA1000), be sure to set the DCA1000_streaming.enabled component to false.
 
-2. **CPSL_TI_Radar_cpp .json configuration**: Next, there is a .json configuration that you will have to generate for each DCA1000 that you want to integrate with. Several examples are available in the [CPSL_TI_Radar_cpp/configs](./radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs/) of the CPSL_TI_Radar_cpp module code. **Pay close attention to the config path in this .json configuration for each DCA1000 as this is the configuration that will be loaded onto the IWR when running the ROS nodes** More information on how to setup and analyze these configurations can be found on the [CPSL_TI_Radar c++ module documentation](https://github.com/davidmhunt/CPSL_TI_Radar/tree/main/CPSL_TI_Radar_cpp) under "Radar .cfg file".
-
-### Launching Radars [NOTE: need to confirm this]
-
-An example launch file can be found in the [launch](./src/ti_radar_connect/launch/). Note, that each radar will need to launch its own ti_radar_connect node. To launch the sample node, simply run the following command to launch radar operations:
+4. **Build and install ROS2 nodes**: Once setup, rebuild and install the ROS2 nodes
 ```
-ros2 launch ti_radar_connect connect_ti_radar_launch.py config_file:=radar_0_IWR1843_demo.json
+cd CPSL_TI_Radar_ROS2
+colcon build --symlink-install
 ```
+
+5. Finally, each radar can be launched using the following launch command
+```
+ros2 launch ti_radar_connect connect_ti_radar_launch.py config_file:=radar_0_IWR1843_nav.json namespace:=radar_0
+```
+The command has the following parameters
+
+| **Parameter** | **Default** | **Description** |  
+|-----------|--------------------------|---------------------------------------------|  
+| `config_file`   | radar_0_IWR1843_demo.json  | the .json config file path in the CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs |  
+| `namespace`| Radar_0| the namespace to use when publishing the point cloud and the frame id of the point cloud

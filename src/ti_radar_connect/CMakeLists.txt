@@ -67,4 +67,10 @@ install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME}/
 )
+
+install(DIRECTORY
+  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs
+  DESTINATION share/${PROJECT_NAME}
+)
+
 ament_package()
