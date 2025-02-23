@@ -70,11 +70,12 @@ colcon build --symlink-install
 
 5. Finally, each radar can be launched using the following launch command
 ```
-ros2 launch ti_radar_connect connect_ti_radar_launch.py config_file:=radar_0_IWR1843_nav.json frame_id:=radar_0
+ros2 launch ti_radar_connect connect_ti_radar_launch.py config_file:=radar_0_IWR1843_nav.json frame_id:=radar_0 stamp_delay_sec:=0.0
 ```
 The command has the following parameters
 
 | **Parameter** | **Default** | **Description** |  
 |-----------|--------------------------|---------------------------------------------|  
 | `config_file`   | radar_0_IWR1843_demo.json  | the .json config file path in the CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs |  
-| `namespace`| Radar_0| the namespace to use when publishing the point cloud and the frame id of the point cloud
+| `frame_id`| Radar_0| the namespace to use when publishing the point cloud and the frame id of the point cloud
+| `stamp_delay_sec`| 0.0| The delay (in seconds) to apply to the PointCloud2's header with respect to the current time. May be useful on real platforms where other sensors/platforms are publishing at slower rates.

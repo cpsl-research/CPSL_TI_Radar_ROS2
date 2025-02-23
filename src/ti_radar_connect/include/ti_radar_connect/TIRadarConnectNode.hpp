@@ -52,6 +52,8 @@ private:
     //config paths
     std::string config_path;
     std::string frame_id;
+    double stamp_delay_sec;
+    rclcpp::Duration stamp_delay; 
     std::string radar_config_path;
     Runner runner;
 

@@ -15,11 +15,15 @@ ARGUMENTS = [
     DeclareLaunchArgument(
         'frame_id', default_value='Radar_0',
         description='radar frame_id'),
+    DeclareLaunchArgument(
+        'stamp_delay_sec', default_value='0.00',
+        description='delay to applied to the published radar messages time'),
 ]
 
 def launch_setup(context,*args,**kwargs):
     frame_id = LaunchConfiguration('frame_id')
     config_file = LaunchConfiguration('config_file')
+    stamp_delay_sec = LaunchConfiguration('stamp_delay_sec')
 
     #derive the full config path
     config_file_str = config_file.perform(context)
@@ -34,7 +38,8 @@ def launch_setup(context,*args,**kwargs):
             name='ti_radar_connect',
             output='screen',
             parameters=[{'config_path': full_config_path,
-                         'frame_id':frame_id}]
+                         'frame_id':frame_id,
+                         'stamp_delay_sec':stamp_delay_sec}]
         )
     ])
 

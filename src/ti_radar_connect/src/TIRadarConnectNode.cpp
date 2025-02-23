@@ -4,6 +4,8 @@ TIRadarConnectNode::TIRadarConnectNode():
     Node("ti_radar_connect_node"),
     config_path(""),
     frame_id(""),
+    stamp_delay_sec(),
+    stamp_delay(rclcpp::Duration::from_seconds(0.0)),
     radar_config_path(),
     runner(),
     radar_config_path_pub_(),
@@ -12,11 +14,15 @@ TIRadarConnectNode::TIRadarConnectNode():
     //declare parameters
     this->declare_parameter<std::string>("config_path");
     this->declare_parameter<std::string>("frame_id","radar_0");
+    this->declare_parameter<double>("stamp_delay_sec",0.0);
 
     //load in parameters
-    config_path = this->get_parameter("config_path").get_value<std::string>();
-    frame_id = this->get_parameter("frame_id").get_value<std::string>();
+    config_path = this->get_parameter("config_path").as_string();
+    frame_id = this->get_parameter("frame_id").as_string();
+    stamp_delay_sec = this->get_parameter("stamp_delay_sec").as_double();
 
+    //initialize the stamp delay
+    stamp_delay = rclcpp::Duration::from_seconds(stamp_delay_sec);
     //initialize initialize the runner
     runner.initialize(config_path);
 
@@ -26,7 +32,7 @@ TIRadarConnectNode::TIRadarConnectNode():
     }
     
     //define a qos profile for some publishers
-    rclcpp::QoS qos_profile = rclcpp::QoS(1); //queue size of 1
+    rclcpp::QoS qos_profile = rclcpp::QoS(5); //queue size of 1
     qos_profile.transient_local();
     qos_profile.reliable();
 
@@ -76,7 +82,7 @@ void TIRadarConnectNode::run_ti_radar(void){
                 //get the point cloud 2 message
                 sensor_msgs::msg::PointCloud2 pc2_msg = get_pointcloud2_msg(
                     detected_points,
-                    this -> now()
+                    this -> now() - stamp_delay
                 );
 
                 //publish the point cloud 2 message
@@ -91,7 +97,7 @@ void TIRadarConnectNode::run_ti_radar(void){
                 //get the adc_data_cube message
                 radar_msgs::msg::ADCDataCube adc_cube_msg = get_AdcDataCube_msg(
                     adc_cube,
-                    this -> now()
+                    this -> now() - stamp_delay
                 );
 
                 adc_data_cube_pub_ -> publish(adc_cube_msg);
