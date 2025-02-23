@@ -3,6 +3,7 @@
 TIRadarConnectNode::TIRadarConnectNode():
     Node("ti_radar_connect_node"),
     config_path(""),
+    frame_id(""),
     radar_config_path(),
     runner(),
     radar_config_path_pub_(),
@@ -10,9 +11,11 @@ TIRadarConnectNode::TIRadarConnectNode():
 {
     //declare parameters
     this->declare_parameter<std::string>("config_path");
+    this->declare_parameter<std::string>("frame_id","radar_0");
 
     //load in parameters
     config_path = this->get_parameter("config_path").get_value<std::string>();
+    frame_id = this->get_parameter("frame_id").get_value<std::string>();
 
     //initialize initialize the runner
     runner.initialize(config_path);
@@ -29,16 +32,18 @@ TIRadarConnectNode::TIRadarConnectNode():
 
 
     radar_config_path_pub_ = 
-        this->create_publisher<std_msgs::msg::String>("radar_config_path",qos_profile);
+        this->create_publisher<std_msgs::msg::String>(frame_id + "/radar_config_path",qos_profile);
     
     if(runner.get_serial_streaming_enabled()){
+        std::string detected_points_topic = frame_id + "/detected_points";
         detected_points_pub_ = 
-            this->create_publisher<sensor_msgs::msg::PointCloud2>("detected_points",qos_profile);
+            this->create_publisher<sensor_msgs::msg::PointCloud2>(detected_points_topic,qos_profile);
     }
 
     if(runner.get_dca1000_streaming_enabled()){
+        std::string adc_cube_topic = frame_id + "/adc_data_cube";
         adc_data_cube_pub_ = 
-            this->create_publisher<radar_msgs::msg::ADCDataCube>("adc_data_cube",qos_profile);
+            this->create_publisher<radar_msgs::msg::ADCDataCube>(adc_cube_topic,qos_profile);
     }
     
 
@@ -71,7 +76,6 @@ void TIRadarConnectNode::run_ti_radar(void){
                 //get the point cloud 2 message
                 sensor_msgs::msg::PointCloud2 pc2_msg = get_pointcloud2_msg(
                     detected_points,
-                    this -> get_namespace(),
                     this -> now()
                 );
 
@@ -87,7 +91,6 @@ void TIRadarConnectNode::run_ti_radar(void){
                 //get the adc_data_cube message
                 radar_msgs::msg::ADCDataCube adc_cube_msg = get_AdcDataCube_msg(
                     adc_cube,
-                    this -> get_namespace(),
                     this -> now()
                 );
 
@@ -116,7 +119,6 @@ void TIRadarConnectNode::pub_radar_config_path(void){
 
 sensor_msgs::msg::PointCloud2 TIRadarConnectNode::get_pointcloud2_msg(
     std::vector<std::vector<float>> &detected_points,
-    const std::string &frame_id,
     rclcpp::Time timestamp){
     
      // Create a PointCloud2 message
@@ -170,7 +172,6 @@ sensor_msgs::msg::PointCloud2 TIRadarConnectNode::get_pointcloud2_msg(
 
 radar_msgs::msg::ADCDataCube TIRadarConnectNode::get_AdcDataCube_msg(
         std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
-        const std::string &frame_id,
         rclcpp::Time timestamp
     )
 {

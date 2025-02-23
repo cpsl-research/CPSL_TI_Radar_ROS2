@@ -13,12 +13,12 @@ ARGUMENTS = [
         description='Path to the radar configuration file install/ti_radar_connect/share/ti_radar_connect/configs folder'
     ),
     DeclareLaunchArgument(
-        'namespace', default_value='Radar_0',
-        description='radar namespace'),
+        'frame_id', default_value='Radar_0',
+        description='radar frame_id'),
 ]
 
 def launch_setup(context,*args,**kwargs):
-    namespace = LaunchConfiguration('namespace')
+    frame_id = LaunchConfiguration('frame_id')
     config_file = LaunchConfiguration('config_file')
 
     #derive the full config path
@@ -30,11 +30,11 @@ def launch_setup(context,*args,**kwargs):
     nodes = GroupAction([
         Node(
             package='ti_radar_connect',
-            namespace=namespace,
             executable='ti_radar_connect',
             name='ti_radar_connect',
             output='screen',
-            parameters=[{'config_path': full_config_path}]
+            parameters=[{'config_path': full_config_path,
+                         'frame_id':frame_id}]
         )
     ])
 

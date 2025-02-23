@@ -1,5 +1,9 @@
 # CPSL_TI_Radar_ROS
 Set of ROS packages which can be used to integrate with the CPSL_TI_Radar C++ codebase available at the [CPSL_TI_Radar Repository](https://github.com/davidmhunt/TI_Radar_Demo_Visualizer). 
+
+## Important Note: Radar Coordinate Frames
+Note, that TI-Radars have a x,y,z coordinates in the East,North,Up convention. Thus, you will likely have to apply a 90 degree rotation to the points to use them in the standard ROS2 Forward, Left, Up coordinate frame
+
 ## Installation (Ubuntu 24.04/ ROS2 Jazzy):
 
 ### Install ROS2
@@ -66,7 +70,7 @@ colcon build --symlink-install
 
 5. Finally, each radar can be launched using the following launch command
 ```
-ros2 launch ti_radar_connect connect_ti_radar_launch.py config_file:=radar_0_IWR1843_nav.json namespace:=radar_0
+ros2 launch ti_radar_connect connect_ti_radar_launch.py config_file:=radar_0_IWR1843_nav.json frame_id:=radar_0
 ```
 The command has the following parameters
 

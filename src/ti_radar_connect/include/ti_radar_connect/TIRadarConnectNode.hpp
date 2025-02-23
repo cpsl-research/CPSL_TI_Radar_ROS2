@@ -34,12 +34,10 @@ private:
     //generating messages
     sensor_msgs::msg::PointCloud2 get_pointcloud2_msg(
         std::vector<std::vector<float>> &detected_points,
-        const std::string &frame_id,
         rclcpp::Time timestamp);
     
     radar_msgs::msg::ADCDataCube get_AdcDataCube_msg(
         std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
-        const std::string &frame_id,
         rclcpp::Time timestamp
     );
     void save_adc_cube_to_msg(
@@ -53,6 +51,7 @@ private:
 
     //config paths
     std::string config_path;
+    std::string frame_id;
     std::string radar_config_path;
     Runner runner;
 
