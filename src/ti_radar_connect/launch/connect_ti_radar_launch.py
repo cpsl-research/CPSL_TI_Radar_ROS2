@@ -18,18 +18,26 @@ ARGUMENTS = [
     DeclareLaunchArgument(
         'stamp_delay_sec', default_value='0.00',
         description='delay to applied to the published radar messages time'),
+    DeclareLaunchArgument('tf_prefix', default_value='',
+                          description='tf_prefix to apply to frame id')
 ]
 
 def launch_setup(context,*args,**kwargs):
     frame_id = LaunchConfiguration('frame_id')
     config_file = LaunchConfiguration('config_file')
     stamp_delay_sec = LaunchConfiguration('stamp_delay_sec')
+    tf_prefix = LaunchConfiguration('tf_prefix')
 
     #derive the full config path
     config_file_str = config_file.perform(context)
     package_share_dir = get_package_share_directory('ti_radar_connect')
     config_directory_path = "configs"
     full_config_path = os.path.join(package_share_dir, config_directory_path, config_file_str)
+
+    #load the tf prefix
+    tf_prefex_str = tf_prefix.perform(context)
+    if (tf_prefex_str):
+        frame_id = "{}/{}".format(tf_prefex_str,frame_id)
 
     nodes = GroupAction([
         Node(
