@@ -18,8 +18,9 @@ ARGUMENTS = [
     DeclareLaunchArgument(
         'stamp_delay_sec', default_value='0.00',
         description='delay to applied to the published radar messages time'),
-    DeclareLaunchArgument('tf_prefix', default_value='',
-                          description='tf_prefix to apply to frame id')
+    DeclareLaunchArgument(
+        'tf_prefix', default_value='',
+        description='tf_prefix to apply to frame id')
 ]
 
 def launch_setup(context,*args,**kwargs):
