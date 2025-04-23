@@ -10,7 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(radar_msgs REQUIRED)
+find_package(raw_radar_msgs REQUIRED)
 
 #add subdirectories
 add_subdirectory(include)
@@ -19,7 +19,7 @@ add_subdirectory(include)
 #declare TIRadarCOnnectNode library
 add_library(TIRadarConnectNode src/TIRadarConnectNode.cpp)
 target_link_libraries(TIRadarConnectNode PUBLIC Runner Utilities nlohmann_json::nlohmann_json)
-ament_target_dependencies(TIRadarConnectNode PUBLIC rclcpp radar_msgs sensor_msgs std_msgs)
+ament_target_dependencies(TIRadarConnectNode PUBLIC rclcpp raw_radar_msgs sensor_msgs std_msgs)
 target_include_directories(TIRadarConnectNode
   PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}>"
@@ -37,7 +37,7 @@ install(
 )
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
-ament_export_dependencies(rclcpp radar_msgs sensor_msgs std_msgs nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler DCA1000Runner Runner TLVProcessing DCA1000Commands)
+ament_export_dependencies(rclcpp raw_radar_msgs sensor_msgs std_msgs nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler DCA1000Runner Runner TLVProcessing DCA1000Commands)
 ament_export_include_directories("include/${PROJECT_NAME}")
 ament_export_libraries(TIRadarConnectNode)
 

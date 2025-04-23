@@ -36,9 +36,10 @@ def launch_setup(context,*args,**kwargs):
     full_config_path = os.path.join(package_share_dir, config_directory_path, config_file_str)
 
     #load the tf prefix
-    tf_prefex_str = tf_prefix.perform(context)
-    if (tf_prefex_str):
-        frame_id = "{}/{}".format(tf_prefex_str,frame_id)
+    tf_prefix_str = tf_prefix.perform(context)
+    frame_id_str = frame_id.perform(context)
+    if (tf_prefix_str):
+        frame_id_str = "/{}/{}".format(tf_prefix_str,frame_id_str)
 
     nodes = GroupAction([
         Node(
@@ -47,7 +48,7 @@ def launch_setup(context,*args,**kwargs):
             name='ti_radar_connect',
             output='screen',
             parameters=[{'config_path': full_config_path,
-                         'frame_id':frame_id,
+                         'frame_id':frame_id_str,
                          'stamp_delay_sec':stamp_delay_sec}]
         )
     ])
