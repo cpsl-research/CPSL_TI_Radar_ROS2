@@ -13,14 +13,16 @@ TIRadarConnectNode::TIRadarConnectNode():
 {
     //declare parameters
     this->declare_parameter<std::string>("config_path");
-    this->declare_parameter<std::string>("frame_id","radar_0");
+    this->declare_parameter<std::string>("radar_name","radar_0");
+    this->declare_parameter<std::string>("tf_prefix","");
     this->declare_parameter<double>("stamp_delay_sec",0.0);
 
     //load in parameters
     config_path = this->get_parameter("config_path").as_string();
-    frame_id = this->get_parameter("frame_id").as_string();
+    std::string radar_name = this->get_parameter("radar_name").as_string();
+    std::string tf_prefix = this->get_parameter("tf_prefix").as_string();
+    frame_id = tf_prefix + "/" + radar_name;
     stamp_delay_sec = this->get_parameter("stamp_delay_sec").as_double();
-
     //initialize the stamp delay
     stamp_delay = rclcpp::Duration::from_seconds(stamp_delay_sec);
     //initialize initialize the runner
@@ -37,16 +39,16 @@ TIRadarConnectNode::TIRadarConnectNode():
     qos_profile.reliable();
 
     radar_config_path_pub_ = 
-        this->create_publisher<std_msgs::msg::String>(frame_id + "/radar_config_path",qos_profile);
+        this->create_publisher<std_msgs::msg::String>(radar_name + "/radar_config_path",qos_profile);
 
     if(runner.get_serial_streaming_enabled()){
-        std::string detected_points_topic = frame_id + "/detected_points";
+        std::string detected_points_topic = radar_name + "/detected_points";
         detected_points_pub_ = 
             this->create_publisher<sensor_msgs::msg::PointCloud2>(detected_points_topic,qos_profile);
     }
 
     if(runner.get_dca1000_streaming_enabled()){
-        std::string adc_cube_topic = frame_id + "/adc_data_cube";
+        std::string adc_cube_topic = radar_name + "/adc_data_cube";
         adc_data_cube_pub_ = 
             this->create_publisher<raw_radar_msgs::msg::ADCDataCube>(adc_cube_topic,qos_profile);
     }

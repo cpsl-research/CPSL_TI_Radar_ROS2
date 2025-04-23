@@ -13,7 +13,7 @@ ARGUMENTS = [
         description='Path to the radar configuration file install/ti_radar_connect/share/ti_radar_connect/configs folder'
     ),
     DeclareLaunchArgument(
-        'frame_id', default_value='Radar_0',
+        'radar_name', default_value='Radar_0',
         description='radar frame_id'),
     DeclareLaunchArgument(
         'stamp_delay_sec', default_value='0.00',
@@ -24,7 +24,7 @@ ARGUMENTS = [
 ]
 
 def launch_setup(context,*args,**kwargs):
-    frame_id = LaunchConfiguration('frame_id')
+    radar_name = LaunchConfiguration('radar_name')
     config_file = LaunchConfiguration('config_file')
     stamp_delay_sec = LaunchConfiguration('stamp_delay_sec')
     tf_prefix = LaunchConfiguration('tf_prefix')
@@ -37,9 +37,9 @@ def launch_setup(context,*args,**kwargs):
 
     #load the tf prefix
     tf_prefix_str = tf_prefix.perform(context)
-    frame_id_str = frame_id.perform(context)
-    if (tf_prefix_str):
-        frame_id_str = "/{}/{}".format(tf_prefix_str,frame_id_str)
+    radar_name_str = radar_name.perform(context)
+    # if (tf_prefix_str):
+    #     frame_id_str = "{}/{}".format(tf_prefix_str,frame_id_str)
 
     nodes = GroupAction([
         Node(
@@ -48,7 +48,8 @@ def launch_setup(context,*args,**kwargs):
             name='ti_radar_connect',
             output='screen',
             parameters=[{'config_path': full_config_path,
-                         'frame_id':frame_id_str,
+                         'radar_name':radar_name_str,
+                         'tf_prefix':tf_prefix_str,
                          'stamp_delay_sec':stamp_delay_sec}]
         )
     ])
