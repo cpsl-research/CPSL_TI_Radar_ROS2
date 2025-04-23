@@ -45,7 +45,7 @@ def launch_setup(context,*args,**kwargs):
         Node(
             package='ti_radar_connect',
             executable='ti_radar_connect',
-            name='ti_radar_connect',
+            name='ti_radar_connect_{}'.format(radar_name_str),
             output='screen',
             parameters=[{'config_path': full_config_path,
                          'radar_name':radar_name_str,
