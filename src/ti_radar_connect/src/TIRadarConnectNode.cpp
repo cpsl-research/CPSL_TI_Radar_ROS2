@@ -36,7 +36,6 @@ TIRadarConnectNode::TIRadarConnectNode():
     qos_profile.transient_local();
     qos_profile.reliable();
 
-
     radar_config_path_pub_ = 
         this->create_publisher<std_msgs::msg::String>(frame_id + "/radar_config_path",qos_profile);
     
@@ -93,14 +92,13 @@ void TIRadarConnectNode::run_ti_radar(void){
             if(runner.get_dca1000_streaming_enabled()){
                 std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> adc_cube =
                     runner.get_next_adc_cube(timeout_ms);
-                
                 //get the adc_data_cube message
                 radar_msgs::msg::ADCDataCube adc_cube_msg = get_AdcDataCube_msg(
                     adc_cube,
                     this -> now() - stamp_delay
                 );
-
                 adc_data_cube_pub_ -> publish(adc_cube_msg);
+                
             }
         }
 
@@ -228,7 +226,7 @@ void TIRadarConnectNode::save_adc_cube_to_msg(
   {
     for (size_t sample_idx = 0; sample_idx < samples_per_chirp; sample_idx ++)
     {
-      for (size_t chirp_idx = 0; chirps_per_frame; chirp_idx ++){
+      for (size_t chirp_idx = 0; chirp_idx < chirps_per_frame; chirp_idx ++){
 
         msg.real_data[out_idx] = adc_cube[rx_idx][sample_idx][chirp_idx].real();
         msg.imag_data[out_idx] = adc_cube[rx_idx][sample_idx][chirp_idx].imag();
