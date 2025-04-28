@@ -1,5 +1,5 @@
-# CPSL_TI_Radar_ROS
-Set of ROS packages which can be used to integrate with the CPSL_TI_Radar C++ codebase available at the [CPSL_TI_Radar Repository](https://github.com/davidmhunt/TI_Radar_Demo_Visualizer). 
+# CPSL_TI_Radar_ROS2
+Set of ROS2 packages which can be used to integrate with the CPSL_TI_Radar C++ codebase available at the [CPSL_TI_Radar Repository](https://github.com/davidmhunt/TI_Radar_Demo_Visualizer). 
 
 ## Important Note: Radar Coordinate Frames
 Note, that TI-Radars have a x,y,z coordinates in the East,North,Up convention. Thus, you will likely have to apply a 90 degree rotation to the points to use them in the standard ROS2 Forward, Left, Up coordinate frame
