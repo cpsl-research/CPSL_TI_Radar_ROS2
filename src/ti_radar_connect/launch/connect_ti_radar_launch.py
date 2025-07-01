@@ -10,7 +10,7 @@ ARGUMENTS = [
     DeclareLaunchArgument(
         'config_file',
         default_value='radar_0_IWR1843_demo.json',
-        description='Path to the radar configuration file install/ti_radar_connect/share/ti_radar_connect/configs folder'
+        description='Radar configuration file in install/ti_radar_connect/share/ti_radar_connect/configs folder'
     ),
     DeclareLaunchArgument(
         'radar_name', default_value='Radar_0',
