@@ -69,8 +69,12 @@ install(DIRECTORY
 )
 
 install(DIRECTORY
-  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs
-  DESTINATION share/${PROJECT_NAME}
+  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/system
+  DESTINATION share/${PROJECT_NAME}/config
+)
+install(DIRECTORY
+  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/radar
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 ament_package()

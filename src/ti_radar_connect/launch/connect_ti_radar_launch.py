@@ -32,8 +32,7 @@ def launch_setup(context,*args,**kwargs):
     #derive the full config path
     config_file_str = config_file.perform(context)
     package_share_dir = get_package_share_directory('ti_radar_connect')
-    config_directory_path = "configs"
-    full_config_path = os.path.join(package_share_dir, config_directory_path, config_file_str)
+    full_config_path = os.path.join(package_share_dir, "config", "system", config_file_str)
 
     #load the tf prefix
     tf_prefix_str = tf_prefix.perform(context)
