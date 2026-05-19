@@ -1,7 +1,7 @@
 {
-    "verbose": false,
+    "verbose": true,
     "TI_Radar_Config_Management": {
-        "TI_Radar_config_path": "../radar/nav_configs/1843_IcaRAus.cfg"
+        "TI_Radar_config_path": "../radar/DCA1000/IWR1843_configs/IWR1843_demo.cfg"
     },
     "CLI_Controller": {
         "CLI_port": "/dev/ttyACM0"

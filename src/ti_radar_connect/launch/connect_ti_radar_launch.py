@@ -9,8 +9,8 @@ import os
 ARGUMENTS = [
     DeclareLaunchArgument(
         'config_file',
-        default_value='radar_0_IWR1843_demo.json',
-        description='Radar configuration file in install/ti_radar_connect/share/ti_radar_connect/configs folder'
+        default_value='front_radar_IWR1843_stress_test.json',
+        description='Bare filename from share/ti_radar_connect/config/system/'
     ),
     DeclareLaunchArgument(
         'radar_name', default_value='Radar_0',
