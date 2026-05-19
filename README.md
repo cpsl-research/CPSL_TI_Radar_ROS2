@@ -74,6 +74,20 @@ All topics are scoped under `<radar_name>/`:
 
 Two files are needed for each radar:
 
+### Adding or customising configs
+
+The accessible config location is:
+```
+src/ti_radar_connect/config/
+├── system/   ← add or edit JSON system configs here
+└── radar/
+    └── nav_configs/   ← add new .cfg chirp profiles here
+```
+
+This location is pre-populated with the 11 configs used by the CPSL_ROS2_Sensors bringup launch files. Files here are installed after the upstream submodule configs, so a file with the same name in this location overrides the submodule default.
+
+The full set of upstream configs (37 JSON + all `.cfg` files) is still available deep in the submodule at `src/ti_radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/` for reference.
+
 ### 1. JSON system config (`config/system/*.json`)
 
 Specifies serial ports, DCA1000 network settings, streaming mode, and points to the radar `.cfg` file:
