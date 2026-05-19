@@ -36,7 +36,7 @@ This package is used as part of the [CPSL_ROS2_Sensors](https://github.com/cpsl-
 eval $(poetry env activate)
 python -m colcon build --packages-select raw_radar_msgs --symlink-install
 python -m colcon build --packages-select ti_radar_connect --symlink-install
-source install/setup.bash
+source install/setup.$(basename $SHELL)
 ```
 
 ## Launch
