@@ -69,8 +69,24 @@ install(DIRECTORY
 )
 
 install(DIRECTORY
-  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs
-  DESTINATION share/${PROJECT_NAME}
+  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/system
+  DESTINATION share/${PROJECT_NAME}/config
+)
+install(DIRECTORY
+  include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/radar
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
+# Install accessible config overrides AFTER submodule configs so same-named
+# files here take precedence. Add new configs to config/system/ and config/radar/
+# rather than editing the submodule.
+install(DIRECTORY
+  config/system
+  DESTINATION share/${PROJECT_NAME}/config
+)
+install(DIRECTORY
+  config/radar
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 ament_package()

@@ -1,81 +1,130 @@
 # CPSL_TI_Radar_ROS2
-Set of ROS2 packages which can be used to integrate with the CPSL_TI_Radar C++ codebase available at the [CPSL_TI_Radar Repository](https://github.com/davidmhunt/TI_Radar_Demo_Visualizer). 
 
-## Important Note: Radar Coordinate Frames
-Note, that TI-Radars have a x,y,z coordinates in the East,North,Up convention. Thus, you will likely have to apply a 90 degree rotation to the points to use them in the standard ROS2 Forward, Left, Up coordinate frame
+ROS2 packages for integrating TI mmWave radars (IWR1443, IWR1843, IWR6843) with the [CPSL_TI_Radar C++ library](https://github.com/davidmhunt/CPSL_TI_Radar). Supports both serial TLV point-cloud streaming and raw ADC capture via a DCA1000 capture card.
 
-## Installation (Ubuntu 24.04/ ROS2 Jazzy):
+## Packages
 
-### Install ROS2
-1. Follow the instructions on the [ROS2 Jazzy installation instructions](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html) website to install ROS. If you are unfamiliar with ROS2, its worth taking some of the [ROS2 Jazzy Tutorials](https://docs.ros.org/en/jazzy/Tutorials.html)
+| Package | Description |
+|---------|-------------|
+| `raw_radar_msgs` | Custom message definitions: `ADCDataCube` (raw ADC samples as int16 arrays) |
+| `ti_radar_connect` | Driver node — connects to IWR radar and/or DCA1000, publishes point clouds or ADC cubes |
 
-### Adding CPSL_TI_Radar_ROS2 packages to catkin workspace
-We provide several ROS2 packages to integrate with the CPSL_TI_Radar module:
-* ti_radar_connect: a ROS package that handles connecting to either the TI-1443, TI-IWR1843, TI-IWR6843, and/or DCA1000 to receive either point cloud TLV packets or raw ADC datacubes from the radar
-* radar_msgs: a ROS package defining custom messages used for topics on the adc data cube, range azimuth response, range doppler response, and the processed radar point cloud
-* radar_sig_processing [coming soon]: a set of ROS packages used for receiving the range doppler and range azimuth responses from the CPSL_TI_Radar module
-* radar_views [coming soon]: a ROS pacakge used for viewing the range-azimuth and range-doppler responses in windows. Additionally includes functionality for viewing the rad-nav model's output in rviz.
+## Prerequisites
 
-1. To add the packages to an existing colcon workspace, perform the following commands
-```
-cd [colcon_ws]/src/
-git clone --recurse-submodules https://github.com/cpsl-research/CPSL_TI_Radar_ROS2.git
-```
-Here, [colcon_ws] is the path to your colcon workspace
+1. **C++ library dependencies** — follow the "Pre-requisite packages" instructions in the [CPSL_TI_Radar_cpp README](./src/ti_radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/Readme.md).
 
-If you forgot to perform the --recurse-submodules when cloning the repository, you can use the following command to load the necessary submodules
-```
-git submodule update --init --recursive
-```
+2. **Serial port access** — add your user to the `dialout` group (log out and back in after):
+   ```bash
+   sudo usermod -a -G dialout $USER
+   ```
 
-2. Since this package utilizes c++ to interact with the DCA1000, we must make sure that all of the pre-requisites are satisfied. To ensure that all pre-requisites are satisfied, please follow the "Pre-requisite packages" instructions in the [CPSL_TI_Radar_cpp github installation instructions](https://github.com/davidmhunt/CPSL_TI_Radar/tree/main/CPSL_TI_Radar_cpp)
+3. **DCA1000 high-rate streaming** — raise the kernel UDP receive buffer cap before running:
+   ```bash
+   sudo sysctl -w net.core.rmem_max=134217728
+   ```
+   To make permanent:
+   ```bash
+   echo 'net.core.rmem_max=134217728' | sudo tee /etc/sysctl.d/99-radar.conf
+   sudo sysctl -p /etc/sysctl.d/99-radar.conf
+   ```
 
+## Build
 
-3. Next, install all of the required ros dependencies using the following command
-```
-cd ~/[colcon_ws]
-rosdep install --from-paths src --rosdistro jazzy -y
-```
+This package is used as part of the [CPSL_ROS2_Sensors](https://github.com/cpsl-research/CPSL_ROS2_Sensors) workspace. Follow the build instructions in that repo's README. Build these packages first:
 
-4. Next, build the ROS nodes in your catkin workspace using the following commands:
-```
-cd ~/[colcon_ws]
-colcon build --symlink-install
+```bash
+eval $(poetry env activate)
+python -m colcon build --packages-select raw_radar_msgs --symlink-install
+python -m colcon build --packages-select ti_radar_connect --symlink-install
+source install/setup.$(basename $SHELL)
 ```
 
-5. Finally, source the setup.bash file so that ROS can find the nodes and the messages
-```
-source install/setup.bash
-```
+## Launch
 
-# Tutorials
+Each radar is launched individually via `connect_ti_radar_launch.py`:
 
-Below are several tutorials for utilizing the CPSL_TI_Radar ROS2 nodes and integrating them with other sensor measurements. For these tutorials, its often helpful to use a terminal with multiple windows. Here, we recommend using a terminal viewer like [tmux](https://tmuxcheatsheet.com/#:~:text=Tmux%20Cheat%20Sheet%20%26%20Quick%20Reference%201%20Sessions,6%20Help%20%24%20tmux%20list-keys%20%3A%20list-keys%20) which allows you to create/view multiple panes and windows in a single terminal window. 
-
-## 1. Streaming point cloud data from IWR1843/IWR6843 Radar boards
-
-Follow these instructions to stream raw radar point clouds from an IWR1843 or IWR6843 radar board in ROS2
-
-1. **Radar Hardware Setup**. Before continuing, follow the steps in the [CPSL_TI_Radar_cpp Readme](./src/ti_radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/Readme.md). The current code is built for mmWave SDK3.6, but it should also work on other datasets as well.
-
-2. **IWR .cfg file**: Next, setup a .cfg file for the TI IWR that you are using. This file includes all of the essential radar parameters which affect the radar's sensing specifications. Many samples are available in the [CPSL_TI_Radar/configurations](./src/ti_radar_connect/include/CPSL_TI_Radar/configurations/). Additional configurations can also be generated using the Ti mmWave Demo if desired as well.
-
-3. **.json configuration file**: Next, setup a .json configuration file that is used to actually run the CPSL_TI_Radar_cpp code used by the ROS2 nodes. Example json configs can be found in the [CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs](./src/ti_radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs). If just streaming the raw data (i.e.; not ADC samples using the DCA1000), be sure to set the DCA1000_streaming.enabled component to false.
-
-4. **Build and install ROS2 nodes**: Once setup, rebuild and install the ROS2 nodes
-```
-cd CPSL_TI_Radar_ROS2
-colcon build --symlink-install
+```bash
+ros2 launch ti_radar_connect connect_ti_radar_launch.py \
+    config_file:=radar_0_IWR1843_vel_sr.json \
+    radar_name:=radar_0 \
+    tf_prefix:=cpsl_ugv_1 \
+    stamp_delay_sec:=0.1
 ```
 
-5. Finally, each radar can be launched using the following launch command
-```
-ros2 launch ti_radar_connect connect_ti_radar_launch.py config_file:=radar_0_IWR1843_nav.json frame_id:=radar_0 stamp_delay_sec:=0.0
-```
-The command has the following parameters
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `config_file` | `radar_0_IWR1843_demo.json` | Bare filename from `config/system/` |
+| `radar_name` | `Radar_0` | Topic namespace and TF frame ID |
+| `stamp_delay_sec` | `0.0` | Header timestamp offset in seconds |
+| `tf_prefix` | `''` | Prefix prepended to the TF frame ID |
 
-| **Parameter** | **Default** | **Description** |  
-|-----------|--------------------------|---------------------------------------------|  
-| `config_file`   | radar_0_IWR1843_demo.json  | the .json config file path in the CPSL_TI_Radar/CPSL_TI_Radar_cpp/configs |  
-| `frame_id`| Radar_0| the namespace to use when publishing the point cloud and the frame id of the point cloud
-| `stamp_delay_sec`| 0.0| The delay (in seconds) to apply to the PointCloud2's header with respect to the current time. May be useful on real platforms where other sensors/platforms are publishing at slower rates.
+In practice, radars are launched from a higher-level bringup file (e.g. `ugv_sensor_bringup.launch.py`) rather than directly.
+
+## Topics Published
+
+All topics are scoped under `<radar_name>/`:
+
+| Topic | Type | Description |
+|-------|------|-------------|
+| `<radar_name>/detected_points` | `sensor_msgs/PointCloud2` | Detected point cloud (serial streaming) |
+| `<radar_name>/adc_data_cube` | `raw_radar_msgs/ADCDataCube` | Raw ADC samples (DCA1000 only) |
+| `<radar_name>/radar_config_path` | `std_msgs/String` | Path to the active JSON config |
+
+## Configuration Files
+
+Two files are needed for each radar:
+
+### Adding or customising configs
+
+The accessible config location is:
+```
+src/ti_radar_connect/config/
+├── system/   ← add or edit JSON system configs here
+└── radar/
+    └── nav_configs/   ← add new .cfg chirp profiles here
+```
+
+This location is pre-populated with the 11 configs used by the CPSL_ROS2_Sensors bringup launch files. Files here are installed after the upstream submodule configs, so a file with the same name in this location overrides the submodule default.
+
+The full set of upstream configs (37 JSON + all `.cfg` files) is still available deep in the submodule at `src/ti_radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/` for reference.
+
+### 1. JSON system config (`config/system/*.json`)
+
+Specifies serial ports, DCA1000 network settings, streaming mode, and points to the radar `.cfg` file:
+
+```json
+{
+    "verbose": false,
+    "TI_Radar_Config_Management": {
+        "TI_Radar_config_path": "../radar/nav_configs/1843_vel_sr.cfg"
+    },
+    "CLI_Controller": {
+        "CLI_port": "/dev/ttyACM0"
+    },
+    "Streamer": {
+        "serial_streaming": {
+            "enabled": true,
+            "data_port": "/dev/ttyACM1"
+        },
+        "DCA1000_streaming": {
+            "enabled": false,
+            "FPGA_IP": "192.168.33.180",
+            "system_IP": "192.168.33.30",
+            "data_port": 4098,
+            "cmd_port": 4096
+        },
+        "save_to_file": false,
+        "board_type": "IWR1843"
+    }
+}
+```
+
+`TI_Radar_config_path` accepts **relative paths** (resolved relative to the JSON file's location) or absolute paths. All configs in `config/system/` use portable relative paths of the form `../radar/<subdir>/<file>.cfg`.
+
+### 2. Radar `.cfg` file (`config/radar/`)
+
+TI mmWave SDK chirp configuration. Must include `lvdsStreamCfg -1 0 1 0` when using DCA1000. Sample configs are organized under `config/radar/nav_configs/`, `config/radar/DCA1000/`, etc.
+
+## Coordinate Frame Note
+
+TI radars output point clouds in **East-North-Up (ENE)** convention. A 90° rotation is required to align with the ROS standard **Forward-Left-Up (FLU)** frame. This rotation is defined in the platform URDF (under `platform_descriptions/urdf/`), not in this driver.
