@@ -21,7 +21,9 @@ TIRadarConnectNode::TIRadarConnectNode():
     config_path = this->get_parameter("config_path").as_string();
     std::string radar_name = this->get_parameter("radar_name").as_string();
     std::string tf_prefix = this->get_parameter("tf_prefix").as_string();
-    frame_id = tf_prefix + "/" + radar_name;
+    // No leading '/' when there is no prefix: tf2 rejects "/front_radar" as a
+    // frame id, so it would never match the URDF's "front_radar".
+    frame_id = tf_prefix.empty() ? radar_name : tf_prefix + "/" + radar_name;
     stamp_delay_sec = this->get_parameter("stamp_delay_sec").as_double();
     //initialize the stamp delay
     stamp_delay = rclcpp::Duration::from_seconds(stamp_delay_sec);
