@@ -1,5 +1,8 @@
 #include "TIRadarConnectNode.hpp"
 
+using cpsl::radar::Code;
+using cpsl::radar::Status;
+
 TIRadarConnectNode::TIRadarConnectNode():
     Node("ti_radar_connect_node"),
     config_path(""),
@@ -7,9 +10,14 @@ TIRadarConnectNode::TIRadarConnectNode():
     stamp_delay_sec(),
     stamp_delay(rclcpp::Duration::from_seconds(0.0)),
     radar_config_path(),
-    runner(),
+    radar_(),
+    startup_ok_(false),
+    pointcloud_enabled_(false),
+    adc_enabled_(false),
+    steady_to_ros_offset_ns_(0),
     radar_config_path_pub_(),
-    detected_points_pub_()
+    detected_points_pub_(),
+    adc_data_cube_pub_()
 {
     //declare parameters
     this->declare_parameter<std::string>("config_path");
@@ -25,89 +33,196 @@ TIRadarConnectNode::TIRadarConnectNode():
     // frame id, so it would never match the URDF's "front_radar".
     frame_id = tf_prefix.empty() ? radar_name : tf_prefix + "/" + radar_name;
     stamp_delay_sec = this->get_parameter("stamp_delay_sec").as_double();
-    //initialize the stamp delay
     stamp_delay = rclcpp::Duration::from_seconds(stamp_delay_sec);
-    //initialize initialize the runner
-    runner.initialize(config_path);
 
-    //stop if initialization failed
-    if(!runner.initialized){
+    //route the driver's log lines through the ROS logger (the driver never prints on its own)
+    cpsl::radar::set_log_sink([](cpsl::radar::LogLevel level, const std::string & msg){
+        auto logger = rclcpp::get_logger("cpsl_ti_radar");
+        switch(level){
+            case cpsl::radar::LogLevel::error: RCLCPP_ERROR(logger,"%s",msg.c_str()); break;
+            case cpsl::radar::LogLevel::warn:  RCLCPP_WARN(logger,"%s",msg.c_str()); break;
+            case cpsl::radar::LogLevel::info:  RCLCPP_INFO(logger,"%s",msg.c_str()); break;
+            default:                           RCLCPP_DEBUG(logger,"%s",msg.c_str()); break;
+        }
+    });
+
+    //load the (schema v2) system config; a v1 file is rejected here, loudly
+    auto cfg = cpsl::radar::RadarConfig::load(config_path);
+    if(!cfg){
+        RCLCPP_ERROR(this->get_logger(),"cannot load radar config '%s': %s: %s",
+            config_path.c_str(), cpsl::radar::to_string(cfg.status.code), cfg.status.message.c_str());
         return;
     }
-    
+
+    //open the ports named by the config (cli.port, DCA1000 socket, ...); sends nothing yet
+    auto opened = cpsl::radar::Radar::open(*cfg);
+    if(!opened){
+        RCLCPP_ERROR(this->get_logger(),"cannot open radar (config '%s'): %s: %s",
+            config_path.c_str(), cpsl::radar::to_string(opened.status.code), opened.status.message.c_str());
+        return;
+    }
+    radar_ = std::move(*opened);
+
+    pointcloud_enabled_ = radar_->serial_enabled();
+    adc_enabled_ = radar_->dca1000_enabled();
+
+    if(!adc_enabled_ && !pointcloud_enabled_){
+        RCLCPP_ERROR(this->get_logger(),
+            "config '%s' enables neither dca1000 nor serial_stream: nothing to publish",
+            config_path.c_str());
+        return;
+    }
+
     //define a qos profile for some publishers
-    rclcpp::QoS qos_profile = rclcpp::QoS(5); //queue size of 1
+    rclcpp::QoS qos_profile = rclcpp::QoS(5);
     qos_profile.transient_local();
     qos_profile.reliable();
 
-    radar_config_path_pub_ = 
+    radar_config_path_pub_ =
         this->create_publisher<std_msgs::msg::String>(radar_name + "/radar_config_path",qos_profile);
 
-    if(runner.get_serial_streaming_enabled()){
+    if(pointcloud_enabled_){
         std::string detected_points_topic = radar_name + "/detected_points";
-        detected_points_pub_ = 
+        detected_points_pub_ =
             this->create_publisher<sensor_msgs::msg::PointCloud2>(detected_points_topic,qos_profile);
     }
+    else{
+        // e.g. the iwr1843_sar_lvds firmware has no on-chip detection and no data UART
+        RCLCPP_INFO(this->get_logger(),
+            "point cloud disabled: serial_stream.enabled is false in '%s' (board %s, firmware has no point-cloud path or it is switched off); running ADC-only",
+            config_path.c_str(), cfg->board().name.c_str());
+    }
 
-    if(runner.get_dca1000_streaming_enabled()){
+    if(adc_enabled_){
         std::string adc_cube_topic = radar_name + "/adc_data_cube";
-        adc_data_cube_pub_ = 
+        adc_data_cube_pub_ =
             this->create_publisher<raw_radar_msgs::msg::ADCDataCube>(adc_cube_topic,qos_profile);
     }
-    
 
     //publish the radar_config_path
-    radar_config_path = runner.get_radar_config_path();
+    radar_config_path = cfg->system().getRadarConfigPath();
     pub_radar_config_path();
 
-    run_ti_radar();
+    //configure the radar (DCA1000 first, then the radar cfg)
+    Status st = radar_->configure();
+    if(st.code == Code::already_configured){
+        RCLCPP_WARN(this->get_logger(),"radar already configured in this process, continuing: %s",st.message.c_str());
+    }
+    else if(!st){
+        RCLCPP_ERROR(this->get_logger(),"cannot configure radar (config '%s'): %s: %s",
+            config_path.c_str(), cpsl::radar::to_string(st.code), st.message.c_str());
+        return;
+    }
+
+    startup_ok_ = true;
 }
 
 TIRadarConnectNode::~TIRadarConnectNode(){}
 
-void TIRadarConnectNode::run_ti_radar(void){
+rclcpp::Time TIRadarConnectNode::to_ros_time(std::chrono::steady_clock::time_point t) const{
+    // Frames carry a steady_clock time (completed_at), not wall time. The
+    // steady->ROS offset is measured ONCE at start(), as (ROS now) - (steady
+    // now), and applied to every frame, so stamps are monotonic and do not
+    // jitter with scheduling. Drift between the two clocks over a long run is
+    // not corrected. stamp_delay_sec is subtracted afterwards, as in v1.
+    int64_t steady_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
+    return rclcpp::Time(steady_ns + steady_to_ros_offset_ns_, this->get_clock()->get_clock_type()) - stamp_delay;
+}
 
-    //define the timeout in ms
-    int timeout_ms = 2000;
+int TIRadarConnectNode::run(void){
 
-    //enter the run loop
-    if(runner.initialized){
-        
-        //start the runner
-        runner.start();
+    if(!startup_ok_ || !radar_){
+        RCLCPP_ERROR(this->get_logger(),"radar not ready, not starting");
+        return 1;
+    }
 
-        while(rclcpp::ok()){
-            //handle point clouds
-            if(runner.get_serial_streaming_enabled()){
-                std::vector<std::vector<float>> detected_points = 
-                    runner.get_next_tlv_detected_points(timeout_ms);
-                
-                //get the point cloud 2 message
-                sensor_msgs::msg::PointCloud2 pc2_msg = get_pointcloud2_msg(
-                    detected_points,
-                    this -> now() - stamp_delay
-                );
+    //take the steady->ROS clock offset once
+    {
+        int64_t ros_ns = this->now().nanoseconds();
+        int64_t steady_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        steady_to_ros_offset_ns_ = ros_ns - steady_ns;
+    }
 
-                //publish the point cloud 2 message
-                detected_points_pub_ -> publish(pc2_msg);
+    Status st = radar_->start();
+    if(!st){
+        RCLCPP_ERROR(this->get_logger(),"cannot start radar: %s: %s",
+            cpsl::radar::to_string(st.code), st.message.c_str());
+        return 1;
+    }
+    RCLCPP_INFO(this->get_logger(),"radar started (adc: %s, point cloud: %s)",
+        adc_enabled_ ? "on" : "off", pointcloud_enabled_ ? "on" : "off");
+
+    // With one stream, block up to 500 ms in it; with two, alternate short waits
+    // so neither starves the other (and shutdown is noticed quickly).
+    const std::chrono::milliseconds wait =
+        (adc_enabled_ && pointcloud_enabled_) ? std::chrono::milliseconds(50) : std::chrono::milliseconds(500);
+
+    cpsl::radar::AdcFrame adc_frame;      // reused: the driver swaps buffers in, no per-frame allocation
+    cpsl::radar::PointCloud point_cloud;
+    int exit_code = 0;
+    auto last_counters = std::chrono::steady_clock::now();
+
+    while(rclcpp::ok()){
+        Status why;
+
+        if(pointcloud_enabled_){
+            if(radar_->next_point_cloud(point_cloud, wait, &why)){
+                detected_points_pub_->publish(get_pointcloud2_msg(
+                    point_cloud.points, to_ros_time(point_cloud.completed_at)));
             }
-
-            //handle ethernet packets
-            if(runner.get_dca1000_streaming_enabled()){
-                std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> adc_cube =
-                    runner.get_next_adc_cube(timeout_ms);
-                //get the adc_data_cube message
-                raw_radar_msgs::msg::ADCDataCube adc_cube_msg = get_AdcDataCube_msg(
-                    adc_cube,
-                    this -> now() - stamp_delay
-                );
-                adc_data_cube_pub_ -> publish(adc_cube_msg);
-                
+            else if(why.code == Code::stopped){ break; }
+            else if(why.code != Code::timeout && why.code != Code::stalled){
+                RCLCPP_ERROR(this->get_logger(),"point cloud stream failed: %s: %s",
+                    cpsl::radar::to_string(why.code), why.message.c_str());
+                exit_code = 1; break;
             }
         }
 
-        //stop the runner
-        runner.stop();
+        if(adc_enabled_){
+            if(radar_->next_adc_frame(adc_frame, wait, &why)){
+                adc_data_cube_pub_->publish(get_AdcDataCube_msg(
+                    adc_frame, to_ros_time(adc_frame.completed_at)));
+            }
+            else if(why.code == Code::stopped){ break; }
+            // timeout: no frame yet, publish nothing. stalled: the driver already warned.
+            else if(why.code != Code::timeout && why.code != Code::stalled){
+                RCLCPP_ERROR(this->get_logger(),"ADC stream failed: %s: %s",
+                    cpsl::radar::to_string(why.code), why.message.c_str());
+                exit_code = 1; break;
+            }
+        }
+
+        auto now = std::chrono::steady_clock::now();
+        if(now - last_counters >= std::chrono::seconds(1)){
+            last_counters = now;
+            log_counters(false);
+        }
+    }
+
+    st = radar_->stop();
+    if(!st){
+        RCLCPP_ERROR(this->get_logger(),"stop reported: %s: %s",
+            cpsl::radar::to_string(st.code), st.message.c_str());
+        if(exit_code == 0){ exit_code = 1; }
+    }
+    log_counters(true);
+    return exit_code;
+}
+
+void TIRadarConnectNode::log_counters(bool final_report){
+    cpsl::radar::Stats s = radar_->stats();
+    if(final_report){
+        RCLCPP_INFO(this->get_logger(),
+            "radar stopped: frames=%lu frames_overwritten=%lu incomplete_frames=%lu skipped_frames=%lu dropped_packets=%lu kernel_drops=%lu stalls=%lu",
+            (unsigned long)s.frames,(unsigned long)s.frames_overwritten,(unsigned long)s.incomplete_frames,
+            (unsigned long)s.skipped_frames,(unsigned long)s.dropped,(unsigned long)s.kernel_drops,(unsigned long)s.stalls);
+    }
+    else{
+        RCLCPP_DEBUG(this->get_logger(),
+            "frames=%lu frames_overwritten=%lu incomplete_frames=%lu dropped_packets=%lu",
+            (unsigned long)s.frames,(unsigned long)s.frames_overwritten,
+            (unsigned long)s.incomplete_frames,(unsigned long)s.dropped);
     }
 }
 
@@ -126,7 +241,7 @@ void TIRadarConnectNode::pub_radar_config_path(void){
 }
 
 sensor_msgs::msg::PointCloud2 TIRadarConnectNode::get_pointcloud2_msg(
-    std::vector<std::vector<float>> &detected_points,
+    const std::vector<cpsl::radar::Point> &detected_points,
     rclcpp::Time timestamp){
     
      // Create a PointCloud2 message
@@ -168,10 +283,10 @@ sensor_msgs::msg::PointCloud2 TIRadarConnectNode::get_pointcloud2_msg(
     sensor_msgs::PointCloud2Iterator<float> iter(point_cloud_msg, "x");
 
     for (const auto &point : detected_points) {
-        iter[0] = point[0];  // x
-        iter[1] = point[1];  // y
-        iter[2] = point[2];  // z
-        iter[3] = point[3];  // vel
+        iter[0] = point.x;
+        iter[1] = point.y;
+        iter[2] = point.z;
+        iter[3] = point.v;  // vel (snr_db / noise_db are not published: message layout unchanged)
         ++iter;  // Move to the next point
     }
 
@@ -179,10 +294,11 @@ sensor_msgs::msg::PointCloud2 TIRadarConnectNode::get_pointcloud2_msg(
 }
 
 raw_radar_msgs::msg::ADCDataCube TIRadarConnectNode::get_AdcDataCube_msg(
-        std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
+        const cpsl::radar::AdcFrame & frame,
         rclcpp::Time timestamp
     )
 {
+    const auto & adc_cube = frame.data;
     raw_radar_msgs::msg::ADCDataCube msg = raw_radar_msgs::msg::ADCDataCube();
   if(adc_cube.size() > 0){
     //stamp the header
@@ -211,7 +327,7 @@ raw_radar_msgs::msg::ADCDataCube TIRadarConnectNode::get_AdcDataCube_msg(
 }
 
 void TIRadarConnectNode::save_adc_cube_to_msg(
-    std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
+    const std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
     raw_radar_msgs::msg::ADCDataCube & msg
 ){
 

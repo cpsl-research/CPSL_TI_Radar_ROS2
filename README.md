@@ -88,7 +88,23 @@ This location is pre-populated with the 11 configs used by the CPSL_ROS2_Sensors
 
 The full set of upstream configs (37 JSON + all `.cfg` files) is still available deep in the submodule at `src/ti_radar_connect/include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/` for reference.
 
-### 1. JSON system config (`config/system/*.json`)
+### v2 driver and config schema (`release/v2.0`)
+
+On this branch `ti_radar_connect` drives the radar through the CPSL_TI_Radar v2 library (`cpsl::radar::Radar`, linked as `CPSL_TI_Radar::driver`). The v2 driver only reads **schema-v2** system configs (`schema_version: 2`, `board`, `firmware`, `cli`, `serial_stream`, `dca1000`, ...); it rejects the v1 shape shown below, and the node then exits non-zero with the driver's message.
+
+- **Ported (schema v2):** `config/system/radar_0_IWR1843_SAR_2ms_fmt2.json` (IWR1843 with the `iwr1843_sar_lvds` firmware, LVDS ADC via a DCA1000, 1 TX / 1 RX, 3300 samples, 255 chirps, per-chirp metadata format `dataFmt 2`). It is the launch file's default `config_file`.
+- **v1 schema, not ported:** every other file in `config/system/` (the `*_docker.json` pairs and all `front_/back_/down_/radar_N_*` configs). They stay as they were; convert one with `tools/migrate_config_v1_to_v2.py --add-firmware` from the CPSL_TI_Radar repo before use.
+- The install tree now also carries the library's `config/boards`, `config/firmware` and `config/limits` beside `config/system`; the driver resolves them relative to the system JSON.
+
+On a fault the node fails loudly: a config that cannot be loaded, a port/socket that cannot be opened (the message names it, e.g. `cannot open the CLI port /dev/ttyACM0`), a rejected configure, or a failed start logs an error and exits with a non-zero code. An `already_configured` result (board configured earlier in the same process) is only a warning. A frame stall is logged by the driver and the node keeps running. `frames_overwritten` and the other counters are logged once per second at debug level and at shutdown at info level.
+
+`header.stamp` of every message is ROS time derived from the frame's steady-clock completion time (the steady-to-ROS offset is taken once at start), minus `stamp_delay_sec`.
+
+### No point cloud on the SAR firmware
+
+The `iwr1843_sar_lvds` firmware has no on-chip detection and no data UART, so there is no point cloud. When the loaded config has `serial_stream.enabled: false` the node creates **no** `detected_points` publisher, starts no point-cloud read, logs once at info `point cloud disabled: ...` and runs ADC-only; it never waits for points. Only configs whose firmware has a data UART (for example `demo`) with `serial_stream.enabled: true` publish `detected_points`.
+
+### 1. JSON system config, v1 shape (`config/system/*.json`, v1 files only)
 
 Specifies serial ports, DCA1000 network settings, streaming mode, and points to the radar `.cfg` file:
 

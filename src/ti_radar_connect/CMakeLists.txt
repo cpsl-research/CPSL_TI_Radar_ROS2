@@ -12,13 +12,17 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(raw_radar_msgs REQUIRED)
 
+# the v2 driver's tests and bench are not needed to build the node
+set(BUILD_TESTING_SAVED ${BUILD_TESTING})
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 #add subdirectories
 add_subdirectory(include)
+set(BUILD_TESTING ${BUILD_TESTING_SAVED} CACHE BOOL "" FORCE)
 
 #following instructions from: following instructions from: https://docs.ros.org/en/rolling/How-To-Guides/Ament-CMake-Documentation.html
 #declare TIRadarCOnnectNode library
 add_library(TIRadarConnectNode src/TIRadarConnectNode.cpp)
-target_link_libraries(TIRadarConnectNode PUBLIC Runner Utilities nlohmann_json::nlohmann_json)
+target_link_libraries(TIRadarConnectNode PUBLIC CPSL_TI_Radar::driver)
 ament_target_dependencies(TIRadarConnectNode PUBLIC rclcpp raw_radar_msgs sensor_msgs std_msgs)
 target_include_directories(TIRadarConnectNode
   PUBLIC
@@ -37,7 +41,7 @@ install(
 )
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
-ament_export_dependencies(rclcpp raw_radar_msgs sensor_msgs std_msgs nlohmann_json Utilities CLIController SerialStreamer DCA1000Handler DCA1000Runner Runner TLVProcessing DCA1000Commands)
+ament_export_dependencies(rclcpp raw_radar_msgs sensor_msgs std_msgs)
 ament_export_include_directories("include/${PROJECT_NAME}")
 ament_export_libraries(TIRadarConnectNode)
 
@@ -76,6 +80,16 @@ install(DIRECTORY
   include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/radar
   DESTINATION share/${PROJECT_NAME}/config
 )
+
+# The v2 driver resolves board/firmware descriptors (and cfg limits) relative to the
+# system JSON's directory (../boards, ../firmware, ../limits), so they must sit beside
+# config/system in the install tree.
+foreach(_d boards firmware limits)
+  install(DIRECTORY
+    include/CPSL_TI_Radar/CPSL_TI_Radar_cpp/config/${_d}
+    DESTINATION share/${PROJECT_NAME}/config
+  )
+endforeach()
 
 # Install accessible config overrides AFTER submodule configs so same-named
 # files here take precedence. Add new configs to config/system/ and config/radar/

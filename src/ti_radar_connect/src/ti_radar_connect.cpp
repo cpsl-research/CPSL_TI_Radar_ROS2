@@ -9,14 +9,19 @@
 int main(int argc, char * argv[])
 {
     rclcpp::init(argc,argv);
-    auto node = std::make_shared<TIRadarConnectNode>();
-    // The node runs its capture loop inside its constructor and only returns
-    // once rclcpp::ok() goes false (SIGINT). Spinning a shut-down context then
-    // throws RCLError and aborts the process instead of letting it exit
-    // cleanly, so only spin while the context is still valid.
-    if(rclcpp::ok()){
-        rclcpp::spin(node);
+    int exit_code = 1;
+    {
+        auto node = std::make_shared<TIRadarConnectNode>();
+        // Fail loud: a radar that could not be opened/configured exits non-zero
+        // (the node has already logged why); it never idles as a silent node.
+        // run() is the blocking capture loop; it returns once rclcpp::ok() goes
+        // false (SIGINT) or the radar fails, and its value is the exit code.
+        if(node->ok()){
+            exit_code = node->run();
+        }
     }
-    rclcpp::shutdown();
-    return 0;
+    if(rclcpp::ok()){
+        rclcpp::shutdown();
+    }
+    return exit_code;
 }
