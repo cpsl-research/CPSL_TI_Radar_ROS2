@@ -1,3 +1,11 @@
+> # RETIRED - this repository is no longer used
+>
+> The ROS 2 nodes now live in **CPSL_TI_Radar** under `ros2/`:
+> <https://github.com/davidmhunt/CPSL_TI_Radar/tree/release/v2.0/ros2>
+> Start from that directory's README (clone `-b release/v2.0`, build, launch).
+> Do not clone, build or open issues here. The final v2 wrapper code is on branch
+> `release/v2.0` (last code commit `a0dd114`, banner `cf05631`).
+
 # CPSL_TI_Radar_ROS2
 
 ROS2 packages for integrating TI mmWave radars (IWR1443, IWR1843, IWR6843) with the [CPSL_TI_Radar C++ library](https://github.com/davidmhunt/CPSL_TI_Radar). Supports both serial TLV point-cloud streaming and raw ADC capture via a DCA1000 capture card.
