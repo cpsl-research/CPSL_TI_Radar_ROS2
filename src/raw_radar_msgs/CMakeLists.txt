@@ -17,6 +17,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MultiArrayDimension.msg"
   "msg/MultiArrayLayout.msg"
   "msg/ADCDataCube.msg"
+  "msg/ADCChirpMeta.msg"
   DEPENDENCIES std_msgs
 )
 

@@ -17,13 +17,17 @@ TIRadarConnectNode::TIRadarConnectNode():
     steady_to_ros_offset_ns_(0),
     radar_config_path_pub_(),
     detected_points_pub_(),
-    adc_data_cube_pub_()
+    adc_data_cube_pub_(),
+    publish_chirp_meta_(false),
+    adc_meta_pub_()
 {
     //declare parameters
     this->declare_parameter<std::string>("config_path");
     this->declare_parameter<std::string>("radar_name","radar_0");
     this->declare_parameter<std::string>("tf_prefix","");
     this->declare_parameter<double>("stamp_delay_sec",0.0);
+    // plain ROS param, default off: publish <radar_name>/adc_meta (SAR per-chirp metadata)
+    this->declare_parameter<bool>("publish_chirp_meta",false);
 
     //load in parameters
     config_path = this->get_parameter("config_path").as_string();
@@ -34,6 +38,7 @@ TIRadarConnectNode::TIRadarConnectNode():
     frame_id = tf_prefix.empty() ? radar_name : tf_prefix + "/" + radar_name;
     stamp_delay_sec = this->get_parameter("stamp_delay_sec").as_double();
     stamp_delay = rclcpp::Duration::from_seconds(stamp_delay_sec);
+    bool want_chirp_meta = this->get_parameter("publish_chirp_meta").as_bool();
 
     //route the driver's log lines through the ROS logger (the driver never prints on its own)
     cpsl::radar::set_log_sink([](cpsl::radar::LogLevel level, const std::string & msg){
@@ -97,6 +102,28 @@ TIRadarConnectNode::TIRadarConnectNode():
         std::string adc_cube_topic = radar_name + "/adc_data_cube";
         adc_data_cube_pub_ =
             this->create_publisher<raw_radar_msgs::msg::ADCDataCube>(adc_cube_topic,qos_profile);
+
+        // per-chirp metadata: sibling topic, only if asked for AND the stream carries it (dataFmt 2)
+        const bool stream_has_meta =
+            cfg->frame_shape().lvds_format == cpsl::radar::LvdsStreamFormat::adc_sar_meta;
+        if(!want_chirp_meta){
+            RCLCPP_INFO(this->get_logger(),
+                "chirp metadata disabled: publish_chirp_meta is false (no %s/adc_meta publisher)",radar_name.c_str());
+        }
+        else if(!stream_has_meta){
+            RCLCPP_INFO(this->get_logger(),
+                "chirp metadata disabled: publish_chirp_meta is true but '%s' does not stream per-chirp metadata (needs the iwr1843_sar_lvds firmware and a dataFmt 2 radar cfg)",
+                config_path.c_str());
+        }
+        else{
+            publish_chirp_meta_ = true;
+            adc_meta_pub_ = this->create_publisher<raw_radar_msgs::msg::ADCChirpMeta>(
+                radar_name + "/adc_meta",qos_profile);
+            RCLCPP_INFO(this->get_logger(),"chirp metadata enabled: publishing %s/adc_meta",radar_name.c_str());
+        }
+    }
+    else if(want_chirp_meta){
+        RCLCPP_INFO(this->get_logger(),"chirp metadata disabled: publish_chirp_meta is true but the ADC stream (dca1000) is off");
     }
 
     //publish the radar_config_path
@@ -181,8 +208,11 @@ int TIRadarConnectNode::run(void){
 
         if(adc_enabled_){
             if(radar_->next_adc_frame(adc_frame, wait, &why)){
-                adc_data_cube_pub_->publish(get_AdcDataCube_msg(
-                    adc_frame, to_ros_time(adc_frame.completed_at)));
+                rclcpp::Time stamp = to_ros_time(adc_frame.completed_at);
+                adc_data_cube_pub_->publish(get_AdcDataCube_msg(adc_frame, stamp));
+                if(publish_chirp_meta_ && !adc_frame.meta.chirps.empty()){
+                    adc_meta_pub_->publish(get_AdcChirpMeta_msg(adc_frame, stamp));
+                }
             }
             else if(why.code == Code::stopped){ break; }
             // timeout: no frame yet, publish nothing. stalled: the driver already warned.
@@ -291,6 +321,48 @@ sensor_msgs::msg::PointCloud2 TIRadarConnectNode::get_pointcloud2_msg(
     }
 
     return point_cloud_msg;
+}
+
+raw_radar_msgs::msg::ADCChirpMeta TIRadarConnectNode::get_AdcChirpMeta_msg(
+        const cpsl::radar::AdcFrame & frame,
+        rclcpp::Time timestamp)
+{
+    const auto & m = frame.meta;
+    const size_t n = m.chirps.size();
+    raw_radar_msgs::msg::ADCChirpMeta msg;
+    msg.header.stamp = timestamp;   // identical to the cube's stamp
+    msg.header.frame_id = frame_id;
+    msg.frame_index = static_cast<uint32_t>(frame.index);
+    msg.record_valid.resize(n);      msg.adc_complete.resize(n);
+    msg.flags.resize(n);             msg.global_chirp_idx.resize(n);
+    msg.run_idx.resize(n);           msg.ts_ticks.resize(n);
+    msg.sat_slices.resize(n);        msg.sat_ref_lag.resize(n);
+    msg.sat_slices_aligned.resize(n);
+    msg.has_time.resize(n);          msg.time_interpolated.resize(n);
+    msg.t_s.resize(n);
+    for(size_t i = 0; i < n; i++){
+        const auto & c = m.chirps[i];
+        msg.record_valid[i] = c.record_valid;
+        msg.adc_complete[i] = c.adc_complete;
+        msg.flags[i] = c.flags;
+        msg.global_chirp_idx[i] = c.global_chirp_idx;
+        msg.run_idx[i] = c.run_idx;
+        msg.ts_ticks[i] = c.ts_ticks;
+        msg.sat_slices[i] = c.sat_slices;
+        msg.sat_ref_lag[i] = c.sat_ref_lag;
+        msg.sat_slices_aligned[i] = c.sat_slices_aligned;
+        msg.has_time[i] = c.has_time;
+        msg.time_interpolated[i] = c.time_interpolated;
+        msg.t_s[i] = c.t_s;
+    }
+    msg.prev_tail_sat[0] = m.prev_tail_sat[0];
+    msg.prev_tail_sat[1] = m.prev_tail_sat[1];
+    msg.run_known = m.run_known;
+    msg.run_idx_frame = m.run_idx;
+    msg.records_valid = m.records_valid;
+    msg.records_invalid = m.records_invalid;
+    msg.records_other_run = m.records_other_run;
+    return msg;
 }
 
 raw_radar_msgs::msg::ADCDataCube TIRadarConnectNode::get_AdcDataCube_msg(

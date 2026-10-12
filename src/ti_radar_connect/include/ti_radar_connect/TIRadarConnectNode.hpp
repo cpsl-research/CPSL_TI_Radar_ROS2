@@ -16,6 +16,7 @@
 #include "std_msgs/msg/string.hpp"
 #include "raw_radar_msgs/msg/multi_array_dimension.hpp"
 #include "raw_radar_msgs/msg/adc_data_cube.hpp"
+#include "raw_radar_msgs/msg/adc_chirp_meta.hpp"
 
 // CPSL_TI_Radar v2 public API (Radar, RadarConfig, Status, AdcFrame, PointCloud)
 #include "Radar.hpp"
@@ -55,6 +56,10 @@ private:
         const cpsl::radar::AdcFrame & frame,
         rclcpp::Time timestamp
     );
+    raw_radar_msgs::msg::ADCChirpMeta get_AdcChirpMeta_msg(
+        const cpsl::radar::AdcFrame & frame,
+        rclcpp::Time timestamp
+    );
     void save_adc_cube_to_msg(
         const std::vector<std::vector<std::vector<std::complex<std::int16_t>>>> & adc_cube,
         raw_radar_msgs::msg::ADCDataCube & msg
@@ -84,6 +89,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr radar_config_path_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr detected_points_pub_;
     rclcpp::Publisher<raw_radar_msgs::msg::ADCDataCube>::SharedPtr adc_data_cube_pub_;
+    bool publish_chirp_meta_;   //param publish_chirp_meta is true AND the stream carries meta
+    rclcpp::Publisher<raw_radar_msgs::msg::ADCChirpMeta>::SharedPtr adc_meta_pub_;
 };
 
 #endif

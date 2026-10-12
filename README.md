@@ -68,6 +68,7 @@ All topics are scoped under `<radar_name>/`:
 |-------|------|-------------|
 | `<radar_name>/detected_points` | `sensor_msgs/PointCloud2` | Detected point cloud (serial streaming) |
 | `<radar_name>/adc_data_cube` | `raw_radar_msgs/ADCDataCube` | Raw ADC samples (DCA1000 only) |
+| `<radar_name>/adc_meta` | `raw_radar_msgs/ADCChirpMeta` | SAR per-chirp metadata; only when `publish_chirp_meta` is true (see below) |
 | `<radar_name>/radar_config_path` | `std_msgs/String` | Path to the active JSON config |
 
 ## Configuration Files
@@ -103,6 +104,38 @@ On a fault the node fails loudly: a config that cannot be loaded, a port/socket 
 ### No point cloud on the SAR firmware
 
 The `iwr1843_sar_lvds` firmware has no on-chip detection and no data UART, so there is no point cloud. When the loaded config has `serial_stream.enabled: false` the node creates **no** `detected_points` publisher, starts no point-cloud read, logs once at info `point cloud disabled: ...` and runs ADC-only; it never waits for points. Only configs whose firmware has a data UART (for example `demo`) with `serial_stream.enabled: true` publish `detected_points`.
+
+### SAR per-chirp metadata
+
+With the `iwr1843_sar_lvds` firmware and a radar cfg using `lvdsStreamCfg ... dataFmt 2` (the shipped `radar_0_IWR1843_SAR_2ms_fmt2.json` does), every chirp carries a metadata record next to its ADC samples. The node can publish it as `raw_radar_msgs/ADCChirpMeta` on **`<radar_name>/adc_meta`**, one message per cube.
+
+It is **off by default**, in every config. Enable it with the ROS parameter `publish_chirp_meta`:
+
+```
+ros2 launch ti_radar_connect connect_ti_radar_launch.py publish_chirp_meta:=true
+# or on the node directly:  --ros-args -p publish_chirp_meta:=true
+```
+
+The parameter is read at start; to change it, restart the node. When it is false, or the config does not stream metadata (firmware without dataFmt 2), no publisher is created and the node logs one info line saying which (`chirp metadata disabled: ...`); the topic is simply absent.
+
+Fields (`ADCChirpMeta.msg`; every per-chirp array has one entry per chirp, so index `i` is chirp `i` of the cube's `chirp` dimension):
+
+| Field | Meaning |
+|-------|---------|
+| `header` | same `stamp` and `frame_id` as the cube |
+| `frame_index` | driver frame counter (32-bit) |
+| `record_valid[]`, `adc_complete[]` | record passed validation (else its fields are 0); all ADC bytes of the chirp arrived |
+| `flags[]` | `0x1` sat valid, `0x2` sat monitor on, `0x4` late, `0x8` skip, `0x10` resync |
+| `global_chirp_idx[]`, `run_idx[]`, `ts_ticks[]` | firmware chirp counter, run index, chirp start in 10 ns ticks since boot |
+| `sat_slices[]`, `sat_ref_lag[]` | saturation result of chirp `global_chirp_idx - sat_ref_lag` (not this chirp) |
+| `sat_slices_aligned[]` | this chirp's own saturated slices, -1 unknown |
+| `has_time[]`, `time_interpolated[]`, `t_s[]` | seconds since the run's first valid record; interpolated when the record was invalid |
+| `prev_tail_sat[2]` | saturation results for the previous frame's last two chirps (-1 none) |
+| `run_known`, `run_idx_frame`, `records_valid/invalid/other_run` | per-frame record counts and the run |
+
+Matching to the cube: the metadata message is published right after its `ADCDataCube` with an identical `header.stamp` and `frame_id`; pair them on the stamp. `frame_index` is the driver's per-frame counter (it increases by one per frame), so a jump between consecutive metadata messages shows frames the driver or a subscriber lost.
+
+Why a sibling message: `ADCDataCube.msg` is unchanged, so its type hash and every existing subscriber (console, dataset_generator) keep working; added fields would change the type for all of them.
 
 ### 1. JSON system config, v1 shape (`config/system/*.json`, v1 files only)
 

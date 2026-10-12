@@ -2,6 +2,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument,GroupAction,OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 
 import os
@@ -19,6 +20,9 @@ ARGUMENTS = [
         'stamp_delay_sec', default_value='0.00',
         description='delay to applied to the published radar messages time'),
     DeclareLaunchArgument(
+        'publish_chirp_meta', default_value='false',
+        description='publish SAR per-chirp metadata on <radar_name>/adc_meta (needs a dataFmt 2 config)'),
+    DeclareLaunchArgument(
         'tf_prefix', default_value='',
         description='tf_prefix to apply to frame id')
 ]
@@ -28,6 +32,7 @@ def launch_setup(context,*args,**kwargs):
     config_file = LaunchConfiguration('config_file')
     stamp_delay_sec = LaunchConfiguration('stamp_delay_sec')
     tf_prefix = LaunchConfiguration('tf_prefix')
+    publish_chirp_meta = LaunchConfiguration('publish_chirp_meta')
 
     #derive the full config path
     config_file_str = config_file.perform(context)
@@ -49,7 +54,8 @@ def launch_setup(context,*args,**kwargs):
             parameters=[{'config_path': full_config_path,
                          'radar_name':radar_name_str,
                          'tf_prefix':tf_prefix_str,
-                         'stamp_delay_sec':stamp_delay_sec}]
+                         'stamp_delay_sec':stamp_delay_sec,
+                         'publish_chirp_meta':ParameterValue(publish_chirp_meta, value_type=bool)}]
         )
     ])
 
